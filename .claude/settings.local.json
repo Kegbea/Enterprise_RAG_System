@@ -2,7 +2,7 @@
 "permissions":{
 "allow":[
     "Read",
-    "write",
+    "Write",
     "Bash(npm*)",
     "Bash(git *)",
     "Bash(node *)"
