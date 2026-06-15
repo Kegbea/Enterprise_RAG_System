@@ -1,0 +1,15 @@
+{
+"permissions":{
+"allow":[
+    "Read",
+    "write",
+    "Bash(npm*)",
+    "Bash(git *)",
+    "Bash(node *)"
+],
+"deny":[
+    "Bash(rm -rf*)"
+ ]
+},
+"autocompactThreshold":80
+}
