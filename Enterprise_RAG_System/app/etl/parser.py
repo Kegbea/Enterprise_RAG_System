@@ -8,7 +8,11 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from io import BytesIO
 import re
+
+from docx import Document as DocxDocument
+from docx.oxml.ns import qn
 
 
 @dataclass
@@ -94,6 +98,70 @@ class MarkdownParser(BaseParser):
         return tables
 
 
+class DocxParser(BaseParser):
+    """DOCX 解析器 — 提取段落和表格，识别 Heading 1-6 样式。"""
+
+    def supported_extensions(self) -> list[str]:
+        return ["docx"]
+
+    def parse(self, file_bytes: bytes, filename: str) -> list[ParsedPage]:
+        buf = BytesIO(file_bytes)
+        doc = DocxDocument(buf)
+
+        text_parts = []
+        tables = []
+        headings = []
+
+        for element in doc.element.body:
+            if element.tag == qn("w:p"):
+                para = self._find_paragraph(doc, element)
+                if para is not None:
+                    style = para.style.name if para.style else ""
+                    para_text = para.text.strip()
+                    if para_text:
+                        text_parts.append(para_text)
+                        if style.startswith("Heading") or style.startswith("heading"):
+                            headings.append(para_text)
+            elif element.tag == qn("w:tbl"):
+                table = self._find_table(doc, element)
+                if table is not None:
+                    md_table = self._table_to_markdown(table)
+                    if md_table:
+                        tables.append(md_table)
+                        text_parts.append(f"[TABLE:{len(tables) - 1}]")
+
+        text = "\n\n".join(text_parts)
+        return [ParsedPage(page_number=None, text=text, tables=tables, headings=headings)]
+
+    @staticmethod
+    def _find_paragraph(doc, element):
+        for para in doc.paragraphs:
+            if para._element is element:
+                return para
+        return None
+
+    @staticmethod
+    def _find_table(doc, element):
+        for table in doc.tables:
+            if table._element is element:
+                return table
+        return None
+
+    @staticmethod
+    def _table_to_markdown(table) -> str:
+        rows = []
+        for row in table.rows:
+            cells = [cell.text.strip().replace("\n", " ") for cell in row.cells]
+            rows.append("| " + " | ".join(cells) + " |")
+        if not rows:
+            return ""
+        if len(rows) >= 1:
+            col_count = len(table.rows[0].cells)
+            separator = "|" + "|".join(["---" for _ in range(col_count)]) + "|"
+            rows.insert(1, separator)
+        return "\n".join(rows)
+
+
 # ── 解析器注册表 ──
 _PARSER_REGISTRY: dict[str, BaseParser] = {}
 
@@ -107,6 +175,7 @@ def _register(parser: BaseParser) -> BaseParser:
 # ── 注册内置解析器 ──
 _register(TxtParser())
 _register(MarkdownParser())
+_register(DocxParser())
 
 
 def get_parser(filename: str) -> BaseParser:
