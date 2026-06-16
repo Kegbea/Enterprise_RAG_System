@@ -1,8 +1,10 @@
-import pytest
-from pathlib import Path
 from io import BytesIO
+from pathlib import Path
+
+import pytest
 from docx import Document as DocxDocument
-from app.etl.parser import ParsedPage, BaseParser, TxtParser, MarkdownParser, get_parser
+
+from app.etl.parser import MarkdownParser, ParsedPage, TxtParser, get_parser
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -145,11 +147,20 @@ def _make_minimal_pdf_bytes(text: str) -> bytes:
         b"BT /F1 12 Tf 100 700 Td (" + safe_text + b") Tj ET"
     )
 
+    font_res = b"<</F1<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>>>"
+    page_obj = (
+        b"3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R"
+        b"/Contents 4 0 R/Resources<</Font" + font_res + b">>>>endobj"
+    )
+    stream_obj = (
+        b"4 0 obj<</Length " + str(len(content_stream)).encode()
+        + b">>stream\n" + content_stream + b"\nendstream\nendobj"
+    )
     objects = [
         b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj",
         b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj",
-        b"3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Contents 4 0 R/Resources<</Font<</F1<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>>>>>>>endobj",
-        b"4 0 obj<</Length " + str(len(content_stream)).encode() + b">>stream\n" + content_stream + b"\nendstream\nendobj",
+        page_obj,
+        stream_obj,
     ]
 
     object_offsets = []

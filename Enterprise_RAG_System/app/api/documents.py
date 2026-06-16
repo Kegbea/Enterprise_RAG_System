@@ -4,7 +4,8 @@
 不含任何业务逻辑。
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, Request
+from fastapi import APIRouter, File, Form, Request, UploadFile
+
 from app.services.ingestion import IngestionService
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])

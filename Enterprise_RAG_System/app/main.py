@@ -7,8 +7,10 @@
 """
 
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.config import settings
 
 
@@ -74,7 +76,7 @@ async def health_check():
     }
 
 
-# ── 挂载路由 ──
-from app.api.documents import router as documents_router
+# ── 挂载路由（import 必须在 app 创建之后，因为 router 依赖 app.state） ──
+from app.api.documents import router as documents_router  # noqa: E402
 
 app.include_router(documents_router)

@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from app.etl.pipeline import ETLPipeline, IngestResult, BatchIngestResult
+from app.etl.pipeline import BatchIngestResult, ETLPipeline, IngestResult
 from app.models.document import DocumentMetadata
 
 if TYPE_CHECKING:

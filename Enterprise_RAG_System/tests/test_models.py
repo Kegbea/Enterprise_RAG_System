@@ -1,7 +1,8 @@
 import hashlib
+
 import pytest
-from datetime import datetime
-from app.models.document import DocumentMetadata, ChunkType, DocStatus
+
+from app.models.document import ChunkType, DocStatus, DocumentMetadata
 
 
 class TestDocumentMetadata:

@@ -1,11 +1,12 @@
 # app/models/document.py
-from enum import Enum
-from datetime import datetime, timezone
-from pydantic import BaseModel, Field, model_validator
 import hashlib
+from datetime import UTC, datetime
+from enum import StrEnum
+
+from pydantic import BaseModel, Field, model_validator
 
 
-class ChunkType(str, Enum):
+class ChunkType(StrEnum):
     TEXT = "text"
     TABLE = "table"
     HEADING = "heading"
@@ -14,7 +15,7 @@ class ChunkType(str, Enum):
     IMAGE_CAPTION = "image_caption"
 
 
-class DocStatus(str, Enum):
+class DocStatus(StrEnum):
     ACTIVE = "active"
     ARCHIVED = "archived"
     DEPRECATED = "deprecated"
@@ -36,7 +37,7 @@ class DocumentMetadata(BaseModel):
 
     # ── 工业运维字段 ──
     source: str = "api"
-    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     file_type: str = ""
     file_size: int = 0
     checksum: str = ""

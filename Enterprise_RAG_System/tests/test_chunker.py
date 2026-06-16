@@ -1,6 +1,5 @@
-import pytest
+from app.etl.chunker import ChunkConfig, TableAwareChunker
 from app.etl.parser import ParsedPage
-from app.etl.chunker import TableAwareChunker, ChunkConfig
 from app.models.document import DocumentMetadata
 
 
@@ -26,7 +25,7 @@ class TestTableAwareChunker:
         )
         pages = [ParsedPage(
             page_number=1,
-            text=f"前言段落。\n[TABLE:0]\n后续段落。",
+            text="前言段落。\n[TABLE:0]\n后续段落。",
             tables=[table_md],
         )]
         base_meta = DocumentMetadata(filename="test.md")

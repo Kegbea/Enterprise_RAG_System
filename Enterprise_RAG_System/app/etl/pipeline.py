@@ -10,9 +10,10 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from app.etl.parser import get_parser
+
+from app.etl.chunker import ChunkConfig, TableAwareChunker
 from app.etl.cleaner import TextCleaner
-from app.etl.chunker import TableAwareChunker, ChunkConfig
+from app.etl.parser import get_parser
 from app.models.document import DocumentMetadata
 
 logger = logging.getLogger(__name__)

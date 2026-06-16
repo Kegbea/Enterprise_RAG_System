@@ -6,14 +6,14 @@
 - 通过 get_parser() 工厂函数按扩展名分发
 """
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from io import BytesIO
-import re
 
+import pdfplumber
 from docx import Document as DocxDocument
 from docx.oxml.ns import qn
-import pdfplumber
 
 
 @dataclass

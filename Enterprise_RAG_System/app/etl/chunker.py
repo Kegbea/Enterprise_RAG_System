@@ -12,9 +12,11 @@ import logging
 import re
 from dataclasses import dataclass
 from uuid import uuid4
-from llama_index.core.schema import TextNode, NodeRelationship, RelatedNodeInfo
+
+from llama_index.core.schema import NodeRelationship, RelatedNodeInfo, TextNode
+
 from app.etl.parser import ParsedPage
-from app.models.document import DocumentMetadata, ChunkType
+from app.models.document import ChunkType, DocumentMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +142,7 @@ class TableAwareChunker:
     def _create_table_node(
         self, table_md: str, page: ParsedPage, base_meta: DocumentMetadata
     ) -> TextNode:
-        row_count = len([l for l in table_md.split("\n") if l.strip().startswith("|")])
+        row_count = len([line for line in table_md.split("\n") if line.strip().startswith("|")])
         if row_count > self.config.max_table_rows:
             logger.warning(
                 f"Table in {base_meta.filename} page {page.page_number} "

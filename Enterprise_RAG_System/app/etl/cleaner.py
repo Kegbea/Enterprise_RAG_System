@@ -5,6 +5,7 @@
 """
 
 import re
+
 from app.etl.parser import ParsedPage
 
 

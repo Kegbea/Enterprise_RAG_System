@@ -14,8 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings
-from app.etl.pipeline import ETLPipeline, InMemoryDocStore
 from app.etl.chunker import ChunkConfig
+from app.etl.pipeline import ETLPipeline, InMemoryDocStore
 from app.services.ingestion import IngestionService
 
 logging.basicConfig(

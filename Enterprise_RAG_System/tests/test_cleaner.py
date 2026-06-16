@@ -1,6 +1,5 @@
-import pytest
-from app.etl.parser import ParsedPage
 from app.etl.cleaner import TextCleaner
+from app.etl.parser import ParsedPage
 
 
 class TestTextCleaner:

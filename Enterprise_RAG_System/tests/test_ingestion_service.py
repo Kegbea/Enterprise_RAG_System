@@ -1,6 +1,5 @@
-import pytest
-from pathlib import Path
 from io import BytesIO
+
 from app.etl.pipeline import ETLPipeline, InMemoryDocStore
 from app.services.ingestion import IngestionService
 
@@ -12,7 +11,7 @@ class TestIngestionService:
         pipeline = ETLPipeline(store)
         service = IngestionService(pipeline, archive_dir=tmp_path)
 
-        content = "企业知识管理系统测试内容。".encode("utf-8") * 20
+        content = "企业知识管理系统测试内容。".encode() * 20
 
         class FakeUploadFile:
             filename = "test.txt"
