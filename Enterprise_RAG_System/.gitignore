@@ -1,0 +1,41 @@
+# ── 环境变量（含密钥） ──
+.env
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── 虚拟环境 ──
+.venv/
+venv/
+
+# ── uv ──
+# uv.lock 需要提交，确保依赖确定性
+
+# ── 持久化数据 ──
+data/chroma/
+data/documents/
+data/sessions/
+data/eval/
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Jupyter ──
+.ipynb_checkpoints/
+
+# ── 测试 ──
+.coverage
+htmlcov/
+.pytest_cache/
