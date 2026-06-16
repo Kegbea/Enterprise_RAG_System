@@ -8,6 +8,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import re
 
 
 @dataclass
@@ -49,13 +50,48 @@ class TxtParser(BaseParser):
 
 
 class MarkdownParser(BaseParser):
-    """Markdown 解析器 — 识别标题层级和表格。（任务 3 实现）"""
+    """Markdown 解析器 — 识别 # 标题层级，正则提取表格。"""
 
     def supported_extensions(self) -> list[str]:
         return ["md"]
 
     def parse(self, file_bytes: bytes, filename: str) -> list[ParsedPage]:
-        raise NotImplementedError("MarkdownParser will be implemented in Task 3")
+        text = file_bytes.decode("utf-8", errors="replace")
+        headings = self._extract_headings(text)
+        tables = self._extract_tables(text)
+        return [ParsedPage(page_number=None, text=text, tables=tables, headings=headings)]
+
+    @staticmethod
+    def _extract_headings(text: str) -> list[str]:
+        headings = []
+        for line in text.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                heading = stripped.lstrip("#").strip()
+                headings.append(heading)
+        return headings
+
+    @staticmethod
+    def _extract_tables(text: str) -> list[str]:
+        """提取 Markdown 表格（以 | 开头的连续行，含分隔行）。"""
+        tables = []
+        lines = text.split("\n")
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            if line.startswith("|") and "---" not in line:
+                if i + 1 < len(lines) and re.match(r'^\|[\s\-:|]+\|$', lines[i + 1].strip()):
+                    table_lines = [lines[i]]
+                    i += 1
+                    while i < len(lines):
+                        table_lines.append(lines[i])
+                        if i + 1 < len(lines) and lines[i + 1].strip().startswith("|"):
+                            i += 1
+                        else:
+                            break
+                    tables.append("\n".join(table_lines))
+            i += 1
+        return tables
 
 
 # ── 解析器注册表 ──

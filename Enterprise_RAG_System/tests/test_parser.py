@@ -37,6 +37,46 @@ class TestTxtParser:
         assert pages[0].text == ""
 
 
+class TestMarkdownParser:
+    def test_supported_extensions(self):
+        parser = MarkdownParser()
+        assert "md" in parser.supported_extensions()
+
+    def test_parse_md_headings(self):
+        parser = MarkdownParser()
+        file_bytes = (FIXTURES / "sample.md").read_bytes()
+        pages = parser.parse(file_bytes, "sample.md")
+
+        assert len(pages) >= 1
+        assert pages[0].page_number is None
+        assert len(pages[0].headings) > 0
+        assert "企业知识管理系统" in " ".join(pages[0].headings)
+
+    def test_parse_md_table(self):
+        parser = MarkdownParser()
+        file_bytes = (FIXTURES / "sample.md").read_bytes()
+        pages = parser.parse(file_bytes, "sample.md")
+
+        all_tables = [t for p in pages for t in p.tables]
+        assert len(all_tables) >= 1
+        assert "组件" in all_tables[0]
+        assert "ChromaDB" in all_tables[0]
+
+    def test_parse_md_heading_path(self):
+        parser = MarkdownParser()
+        content = b"# Ch1\n\n## Sec1.1\n\nSome text here.\n\n### Sec1.1.1\n\nDeeper text.\n"
+        pages = parser.parse(content, "test.md")
+        text = pages[0].text
+        assert "Ch1" in text
+        assert "Sec1.1" in text
+
+    def test_md_no_table(self):
+        parser = MarkdownParser()
+        content = b"# Title\n\nJust some paragraph text.\n\nAnother paragraph.\n"
+        pages = parser.parse(content, "test.md")
+        assert pages[0].tables == []
+
+
 class TestGetParser:
     def test_get_parser_by_extension(self):
         assert isinstance(get_parser("file.txt"), TxtParser)
