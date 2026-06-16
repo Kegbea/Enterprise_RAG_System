@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     # ── 检索参数 ──
     top_k: int = 5
     hybrid_top_k: int = 15
+    llm_temperature: float = 0.1
 
     # ── 服务 ──
     api_host: str = "0.0.0.0"

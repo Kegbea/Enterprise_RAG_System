@@ -102,7 +102,7 @@ class QueryEngine:
         self._llm = DashScope(
             model_name=llm_model or settings.llm_model,
             api_key=settings.dashscope_api_key,
-            temperature=0.1,
+            temperature=settings.llm_temperature,
         )
         self._system_prompt = system_prompt or SYSTEM_PROMPT
 
@@ -226,7 +226,7 @@ def _build_context(nodes: list[NodeWithScore]) -> str:
     for i, node in enumerate(nodes, 1):
         meta = node.metadata
         source = meta.get("filename", "unknown")
-        page = f" 第{meta['page_number']}页" if meta.get("page_number") else ""
+        page = f" 第{meta.get('page_number')}页" if meta.get("page_number") else ""
         heading = f" > {meta['heading_path']}" if meta.get("heading_path") else ""
         header = f"[来源 {i}：{source}{page}{heading}]"
         parts.append(f"{header}\n{node.text}")

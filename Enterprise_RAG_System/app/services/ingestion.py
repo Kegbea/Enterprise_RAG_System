@@ -13,6 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from app.config import settings
 from app.etl.pipeline import BatchIngestResult, ETLPipeline, IngestResult
 from app.models.document import DocumentMetadata
 
@@ -27,7 +28,7 @@ class IngestionService:
 
     def __init__(self, pipeline: ETLPipeline, archive_dir: Path | None = None):
         self.pipeline = pipeline
-        self.archive_dir = Path(archive_dir) if archive_dir else Path("data/documents")
+        self.archive_dir = Path(archive_dir) if archive_dir else Path(settings.document_archive_dir)
         self.archive_dir.mkdir(parents=True, exist_ok=True)
         self._on_ingested: Callable[[], None] | None = None
 

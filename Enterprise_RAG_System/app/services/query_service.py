@@ -43,6 +43,12 @@ class QueryService:
         """RAG 引擎是否已就绪（即是否有已索引的文档）。"""
         return self._engine is not None
 
+    def ensure_ready(self) -> bool:
+        """确保引擎已初始化，失败时返回 False。"""
+        if self._engine is None:
+            self._init_engine()
+        return self._engine is not None
+
     async def query_stream(
         self, query: str, chat_history: list[dict[str, str]] | None = None
     ) -> AsyncGenerator[str, None]:
@@ -58,10 +64,7 @@ class QueryService:
         Raises:
             RuntimeError: 引擎未初始化（无文档）
         """
-        if not self._engine:
-            self._init_engine()
-
-        if not self._engine:
+        if not self.ensure_ready():
             raise RuntimeError(
                 "RAG 引擎未初始化：请先上传文档。"
                 "POST /api/documents/upload"
@@ -75,11 +78,9 @@ class QueryService:
 
         在 IngestionService 每次成功入库后调用。
         """
-        if self._store.count() == 0:
-            logger.info("Store is empty, skipping index refresh")
-            return
         nodes = self._store.get_all_nodes()
         if not nodes:
+            logger.info("Store is empty, skipping index refresh")
             return
         if self._retriever is not None:
             try:

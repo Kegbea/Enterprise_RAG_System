@@ -668,6 +668,7 @@ dependencies = [
     { name = "llama-index-core" },
     { name = "llama-index-embeddings-dashscope" },
     { name = "llama-index-llms-dashscope" },
+    { name = "llama-index-llms-openai" },
     { name = "llama-index-postprocessor-flag-embedding-reranker" },
     { name = "llama-index-retrievers-bm25" },
     { name = "llama-index-vector-stores-chroma" },
@@ -710,6 +711,7 @@ requires-dist = [
     { name = "llama-index-core", specifier = ">=0.12.0" },
     { name = "llama-index-embeddings-dashscope", specifier = ">=0.3.0" },
     { name = "llama-index-llms-dashscope", specifier = ">=0.4.0" },
+    { name = "llama-index-llms-openai", specifier = ">=0.3.0" },
     { name = "llama-index-postprocessor-flag-embedding-reranker", specifier = ">=0.4.0" },
     { name = "llama-index-retrievers-bm25", specifier = ">=0.4.0" },
     { name = "llama-index-vector-stores-chroma", specifier = ">=0.4.0" },
@@ -1561,6 +1563,19 @@ dependencies = [
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/6d/cb/f5b6ed5007803ea880c4c7ab4aede3b8a22fe6c5a103a3baa22bf71840b1/llama_index_llms_dashscope-0.6.1.tar.gz", hash = "sha256:c55a270f2e2053b3c148a4254e6acf12114521f11b78e3a695d1af2b17300849" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/8f/54/4116c207f74eab6dc0d27d3825be95efce7588080d41f6e4be22932a1d82/llama_index_llms_dashscope-0.6.1-py3-none-any.whl", hash = "sha256:2a60d2f333e5eaca9c0463dbe3de9a5d0036b602662a2839a98a7f0ca4942b09" },
+]
+
+[[package]]
+name = "llama-index-llms-openai"
+version = "0.7.9"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+dependencies = [
+    { name = "llama-index-core" },
+    { name = "openai" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/b2/85/f07466d0f5c3f1e1f295a60f2d2e9d32163635ba39ae2fda22ce2fbac1c9/llama_index_llms_openai-0.7.9.tar.gz", hash = "sha256:f54a24b717134c86e724007057a06a84394f019d1f01e918b624894e208a86df" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/62/c2/cfa341cff00154b58abed3fc559fb43c2531d5dd70eefb75f230704d4c3c/llama_index_llms_openai-0.7.9-py3-none-any.whl", hash = "sha256:0bc8f59faddf8dbc9f90c5576127ab2fa6d368be5078885dc7e611af129b5a79" },
 ]
 
 [[package]]

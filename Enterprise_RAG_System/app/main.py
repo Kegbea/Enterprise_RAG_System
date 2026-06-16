@@ -96,6 +96,8 @@ async def health_check():
 
 
 # ── 挂载路由（import 必须在 app 创建之后，因为 router 依赖 app.state） ──
+from app.api.chat import router as chat_router  # noqa: E402
 from app.api.documents import router as documents_router  # noqa: E402
 
+app.include_router(chat_router)
 app.include_router(documents_router)

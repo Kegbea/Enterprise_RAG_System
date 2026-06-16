@@ -12,6 +12,7 @@ dependencies = [
     # ── RAG 核心编排 ──
     "llama-index-core>=0.12.0",
     "llama-index-llms-dashscope>=0.4.0",
+    "llama-index-llms-openai>=0.3.0",
     "llama-index-embeddings-dashscope>=0.3.0",
     "llama-index-vector-stores-chroma>=0.4.0",
     "llama-index-retrievers-bm25>=0.4.0",
