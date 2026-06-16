@@ -13,6 +13,7 @@ import re
 
 from docx import Document as DocxDocument
 from docx.oxml.ns import qn
+import pdfplumber
 
 
 @dataclass
@@ -162,6 +163,51 @@ class DocxParser(BaseParser):
         return "\n".join(rows)
 
 
+class PDFParser(BaseParser):
+    """PDF 解析器 — 基于 pdfplumber 按页提取文本和表格。"""
+
+    def supported_extensions(self) -> list[str]:
+        return ["pdf"]
+
+    def parse(self, file_bytes: bytes, filename: str) -> list[ParsedPage]:
+        pages = []
+        with pdfplumber.open(BytesIO(file_bytes)) as pdf:
+            for page_num, page in enumerate(pdf.pages, start=1):
+                text = page.extract_text() or ""
+                tables_raw = page.extract_tables() or []
+
+                tables = []
+                for table_idx, table in enumerate(tables_raw):
+                    md_table = self._table_to_markdown(table)
+                    if md_table:
+                        tables.append(md_table)
+                        text += f"\n[TABLE:{table_idx}]\n"
+
+                pages.append(ParsedPage(
+                    page_number=page_num,
+                    text=text,
+                    tables=tables,
+                    headings=[],
+                ))
+        return pages
+
+    @staticmethod
+    def _table_to_markdown(table: list[list[str | None]]) -> str:
+        """将 pdfplumber 提取的二维表格转为 Markdown Table。"""
+        if not table or not table[0]:
+            return ""
+        rows = []
+        for row in table:
+            cells = [(cell or "").strip().replace("\n", " ") for cell in row]
+            rows.append("| " + " | ".join(cells) + " |")
+        if not rows:
+            return ""
+        col_count = len(table[0])
+        separator = "|" + "|".join(["---" for _ in range(col_count)]) + "|"
+        rows.insert(1, separator)
+        return "\n".join(rows)
+
+
 # ── 解析器注册表 ──
 _PARSER_REGISTRY: dict[str, BaseParser] = {}
 
@@ -176,6 +222,7 @@ def _register(parser: BaseParser) -> BaseParser:
 _register(TxtParser())
 _register(MarkdownParser())
 _register(DocxParser())
+_register(PDFParser())
 
 
 def get_parser(filename: str) -> BaseParser:
