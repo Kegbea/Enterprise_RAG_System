@@ -21,6 +21,8 @@ data/chroma/
 data/documents/
 data/sessions/
 data/eval/
+data/storage/
+data/test_storage/
 
 # ── IDE ──
 .vscode/

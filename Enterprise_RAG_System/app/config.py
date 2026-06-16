@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     chroma_persist_dir: str = "data/chroma"
     chroma_collection_name: str = "enterprise_knowledge"
 
+    # ── 持久化存储 ──
+    storage_dir: str = "data/storage"
+
     # ── 重排序模型 ──
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
 

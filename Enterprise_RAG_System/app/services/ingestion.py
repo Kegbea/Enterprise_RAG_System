@@ -5,9 +5,11 @@
 - 上传文件归档到 data/documents/
 - 调用 pipeline.ingest_bytes()
 - 返回结构化结果
+- 入库成功后通知 QueryService 刷新检索索引
 """
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,6 +29,11 @@ class IngestionService:
         self.pipeline = pipeline
         self.archive_dir = Path(archive_dir) if archive_dir else Path("data/documents")
         self.archive_dir.mkdir(parents=True, exist_ok=True)
+        self._on_ingested: Callable[[], None] | None = None
+
+    def set_on_ingested(self, callback: Callable[[], None]) -> None:
+        """注册入库成功回调（供 QueryService.refresh 对接）。"""
+        self._on_ingested = callback
 
     async def ingest_upload(
         self,
@@ -92,12 +99,18 @@ class IngestionService:
             file_size=len(content),
         )
 
-        return self.pipeline.ingest_bytes(
+        result = self.pipeline.ingest_bytes(
             file_bytes=content,
             filename=filename,
             metadata_overrides=overrides,
             overwrite=overwrite,
         )
+
+        # 入库成功后通知 QueryService 刷新检索索引
+        if result.status in ("created", "overwritten") and self._on_ingested:
+            self._on_ingested()
+
+        return result
 
     def ingest_batch(
         self, dir_path: Path | None = None, overwrite: bool = False

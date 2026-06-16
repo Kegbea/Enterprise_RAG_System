@@ -6,6 +6,7 @@
 - 全局单例（RAG 引擎）通过 lifespan 事件初始化和销毁
 """
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,13 +14,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理。
 
-    startup:  初始化目录、加载模型（阶段三后启用）
-    shutdown: 清理资源
+    startup:  初始化目录、加载模型、构建 RAG 引擎
+    shutdown: 持久化存储、清理资源
     """
     # === Startup ===
     # 确保必要的持久化目录存在
@@ -27,21 +30,37 @@ async def lifespan(app: FastAPI):
     settings.document_archive_path.mkdir(parents=True, exist_ok=True)
     settings.session_path.mkdir(parents=True, exist_ok=True)
 
-    # 初始化 ETL Pipeline + IngestionService
+    # 1. 持久化文档存储
     from app.etl.pipeline import ETLPipeline, InMemoryDocStore
+
+    store = InMemoryDocStore(persist_dir=settings.storage_dir)
+
+    # 2. ETL Pipeline + IngestionService
+    pipeline = ETLPipeline(store)
     from app.services.ingestion import IngestionService
 
-    store = InMemoryDocStore()
-    pipeline = ETLPipeline(store)
-    app.state.ingestion_service = IngestionService(
+    ingestion_service = IngestionService(
         pipeline=pipeline,
         archive_dir=settings.document_archive_path,
     )
+    app.state.ingestion_service = ingestion_service
+
+    # 3. RAG 查询服务（传入 store，支持后续懒初始化）
+    from app.services.query_service import QueryService
+
+    query_service = QueryService(store)
+    app.state.query_service = query_service
+
+    # 4. 绑定回调：入库成功后自动刷新检索索引
+    ingestion_service.set_on_ingested(query_service.refresh)
 
     yield  # ← 应用运行期间
 
     # === Shutdown ===
-    pass
+    # 退出前落盘，确保所有数据持久化
+    if hasattr(app.state, "ingestion_service"):
+        app.state.ingestion_service.pipeline.store.persist()
+        logger.info("Storage persisted on shutdown")
 
 
 app = FastAPI(

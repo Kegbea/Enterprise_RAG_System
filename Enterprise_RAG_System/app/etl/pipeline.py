@@ -3,13 +3,17 @@
 职责：串起解析、清洗、切块、入库四个步骤，提供单文件和批量入口。
 去重逻辑基于 SHA256 checksum，支持跳过或覆盖。
 
-向量存储：当前使用内存存储（InMemoryDocStore），后续可切换 ChromaDB。
+向量存储：基于 LlamaIndex SimpleDocumentStore，支持本地持久化。
+启动时自动从 data/storage 恢复，增量入库时自动落盘。
 """
 
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from llama_index.core.schema import TextNode
+from llama_index.core.storage.docstore import SimpleDocumentStore
 
 from app.etl.chunker import ChunkConfig, TableAwareChunker
 from app.etl.cleaner import TextCleaner
@@ -42,38 +46,90 @@ class BatchIngestResult:
 
 
 class InMemoryDocStore:
-    """内存文档存储 — 简单的 dict 实现，用于开发/测试阶段。
+    """本地持久化文档存储 — 基于 LlamaIndex SimpleDocumentStore。
 
-    接口与 ChromaDB 兼容，后续可无缝切换：
+    接口保持与阶段二 100% 兼容（鸭子类型）：
     - add(ids, documents, metadatas)
     - get(where)
     - delete(ids)
     - count()
+
+    新增能力：
+    - persist() / _restore() — 自动落盘与恢复
+    - get_all_nodes() — 返回全部 TextNode，供 RAG 检索层建索引
     """
 
-    def __init__(self):
-        self._docs: dict[str, dict] = {}
+    def __init__(self, persist_dir: str | None = None):
+        self._persist_dir = persist_dir
+        self._docstore = SimpleDocumentStore()
+        if persist_dir:
+            p = Path(persist_dir)
+            persist_file = p / "docstore.json"
+            if persist_file.exists():
+                try:
+                    self._docstore = SimpleDocumentStore.from_persist_dir(persist_dir)
+                    logger.info(
+                        f"Restored {len(self._docstore.docs)} nodes from {persist_dir}"
+                    )
+                    return
+                except Exception as e:
+                    logger.warning(f"Failed to restore from {persist_dir}: {e}, starting fresh")
+            p.mkdir(parents=True, exist_ok=True)
+
+    # ── 核心接口（与阶段二兼容） ──────────────────────────
 
     def add(self, ids: list[str], documents: list[str], metadatas: list[dict]) -> None:
-        for id_, doc, meta in zip(ids, documents, metadatas):
-            self._docs[id_] = {"document": doc, "metadata": meta}
+        """批量添加文档节点。"""
+        nodes = [
+            TextNode(id_=id_, text=text, metadata=meta)
+            for id_, text, meta in zip(ids, documents, metadatas)
+        ]
+        self._docstore.add_documents(nodes)
+        self._maybe_persist()
 
     def get(self, where: dict) -> dict:
-        """按 metadata 字段过滤。返回 ChromaDB 兼容格式。"""
+        """按 metadata 字段精确匹配过滤。返回 ChromaDB 兼容格式。"""
         results = []
         key = list(where.keys())[0]
         value = where[key]
-        for id_, entry in self._docs.items():
-            if entry["metadata"].get(key) == value:
-                results.append(id_)
+        for doc_id in self._docstore.docs:
+            node = self._docstore.get_document(doc_id, raise_error=False)
+            if node is not None and node.metadata.get(key) == value:
+                results.append(doc_id)
         return {"ids": results}
 
     def delete(self, ids: list[str]) -> None:
+        """按 ID 列表删除节点。"""
         for id_ in ids:
-            self._docs.pop(id_, None)
+            self._docstore.delete_document(id_)
+        self._maybe_persist()
 
     def count(self) -> int:
-        return len(self._docs)
+        return len(self._docstore.docs)
+
+    # ── 持久化 ────────────────────────────────────────────
+
+    def persist(self) -> None:
+        """强制落盘。"""
+        if self._persist_dir:
+            persist_path = str(Path(self._persist_dir) / "docstore.json")
+            self._docstore.persist(persist_path)
+            logger.debug(f"Persisted {self.count()} nodes to {persist_path}")
+
+    def _maybe_persist(self) -> None:
+        """增量写入后自动落盘（无持久化目录时静默跳过）。"""
+        self.persist()
+
+    # ── RAG 检索层接口 ────────────────────────────────────
+
+    def get_all_nodes(self) -> list[TextNode]:
+        """返回存储中全部 TextNode 列表，供 RAG 检索器构建索引。"""
+        nodes: list[TextNode] = []
+        for doc_id in self._docstore.docs:
+            node = self._docstore.get_document(doc_id, raise_error=False)
+            if node is not None:
+                nodes.append(node)
+        return nodes
 
 
 class ETLPipeline:

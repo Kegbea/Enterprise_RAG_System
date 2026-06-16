@@ -9,7 +9,6 @@ dependencies = [
     # ── Web 框架 ──
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
-
     # ── RAG 核心编排 ──
     "llama-index-core>=0.12.0",
     "llama-index-llms-dashscope>=0.4.0",
@@ -17,21 +16,16 @@ dependencies = [
     "llama-index-vector-stores-chroma>=0.4.0",
     "llama-index-retrievers-bm25>=0.4.0",
     "llama-index-postprocessor-flag-embedding-reranker>=0.4.0",
-
     # ── 向量数据库 ──
     "chromadb>=0.5.0",
-
     # ── 文档解析 ──
     "pdfplumber>=0.11.0",
     "python-docx>=1.1.0",
     "markitdown>=0.1.0",
-
     # ── 前端 ──
     "streamlit>=1.38.0",
-
     # ── 评估 ──
     "ragas>=0.2.0",
-
     # ── 工具库 ──
     "python-multipart>=0.0.12",
     "pydantic-settings>=2.5.0",
@@ -56,6 +50,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["app", "web_ui"]
 
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
+
 [tool.uv]
 # uv 全局配置（不含依赖声明）
 
@@ -78,3 +76,6 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
