@@ -25,8 +25,16 @@ async def lifespan(app: FastAPI):
     settings.document_archive_path.mkdir(parents=True, exist_ok=True)
     settings.session_path.mkdir(parents=True, exist_ok=True)
 
-    # 后续阶段将在此处初始化 RAG 引擎全局实例
-    # app.state.rag_engine = ...
+    # 初始化 ETL Pipeline + IngestionService
+    from app.etl.pipeline import ETLPipeline, InMemoryDocStore
+    from app.services.ingestion import IngestionService
+
+    store = InMemoryDocStore()
+    pipeline = ETLPipeline(store)
+    app.state.ingestion_service = IngestionService(
+        pipeline=pipeline,
+        archive_dir=settings.document_archive_path,
+    )
 
     yield  # ← 应用运行期间
 
@@ -64,3 +72,9 @@ async def health_check():
         "llm_model": settings.llm_model,
         "embedding_model": settings.embedding_model,
     }
+
+
+# ── 挂载路由 ──
+from app.api.documents import router as documents_router
+
+app.include_router(documents_router)
