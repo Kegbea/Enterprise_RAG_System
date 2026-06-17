@@ -27,6 +27,9 @@ dependencies = [
     "streamlit>=1.38.0",
     # ── 评估 ──
     "ragas>=0.2.0",
+    "langchain-community",
+    "langchain-google-vertexai",
+    "datasets>=3.0.0",
     # ── 工具库 ──
     "python-multipart>=0.0.12",
     "pydantic-settings>=2.5.0",

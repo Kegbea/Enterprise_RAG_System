@@ -44,11 +44,34 @@ class IngestionService:
         custom_metadata: dict[str, str] | None = None,
         overwrite: bool = False,
     ) -> IngestResult:
-        """API 异步上传入口。"""
+        """API 异步上传入口 — 从 UploadFile 读取并处理。"""
         content = await file.read()
         return self._process_upload(
             content=content,
             filename=file.filename or "unknown",
+            department_id=department_id,
+            tags=tags or [],
+            custom_metadata=custom_metadata or {},
+            source="api",
+            overwrite=overwrite,
+        )
+
+    async def ingest_bytes(
+        self,
+        content: bytes,
+        filename: str,
+        department_id: str = "public",
+        tags: list[str] | None = None,
+        custom_metadata: dict[str, str] | None = None,
+        overwrite: bool = False,
+    ) -> IngestResult:
+        """直接传入 bytes 的异步入库入口。
+
+        用于路由层已读取文件内容的场景，避免二次读取。
+        """
+        return self._process_upload(
+            content=content,
+            filename=filename,
             department_id=department_id,
             tags=tags or [],
             custom_metadata=custom_metadata or {},

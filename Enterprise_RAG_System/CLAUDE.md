@@ -9,12 +9,15 @@ uv sync                          # 安装/同步所有依赖（含 dev）
 uv sync --no-dev                 # 仅生产依赖
 uv run uvicorn app.main:app --reload   # 启动 FastAPI 后端
 uv run streamlit run web_ui/app.py     # 启动 Streamlit 前端
-uv run pytest -v                 # 运行全部测试（当前 86 个）
+uv run pytest -v                 # 运行全部测试（111 collected, 108 passed, 3 skipped）
 uv run pytest -v --cov=app       # 带覆盖率
 uv run pytest tests/test_parser.py -v  # 单文件测试
 uv run pytest -m "not slow"      # 跳过慢速测试
 uv run ruff check .              # lint 检查
 uv run ruff format .             # 代码格式化
+uv run python -m scripts.ingest --dir data/documents  # 批量导入文档
+uv run python -m app.eval.cli --mock                  # Mock 评估（不调用 API）
+uv run python -m app.eval.cli --output report.json    # 真实评估 + JSON 报告
 ```
 
 ## 架构分层
@@ -24,20 +27,32 @@ web_ui/ (Streamlit) ──HTTP/SSE──▶ app/api/ (薄路由) ──▶ app/s
                                                              │
                                     app/rag/ (检索) ◀────────┤
                                     app/etl/ (入库) ◀────────┘
+                                    app/eval/ (评估)         独立模块
 ```
 
 **五层结构，从上到下：**
 
-1. **`web_ui/`** — Streamlit 前端。侧边栏导航，聊天页（流式+引用卡片）、文档管理页。通过 `api_client.py` 封装后端调用。
-2. **`app/api/`** — FastAPI 路由层。**薄如纸**：只做参数校验 + 调 service + 返回响应。`chat.py` 含 503 预检（引擎未就绪时拒绝请求）。不含任何业务逻辑。
-3. **`app/services/`** — 业务逻辑层。`QueryService` 管理 RAG 引擎生命周期（延迟初始化 + 自动刷新），`IngestionService` 管理文档入库。可脱离 HTTP 独立测试。
+1. **`web_ui/`** — Streamlit 前端。侧边栏导航，聊天页（流式+引用卡片）、文档管理页。通过 `api_client.py` 封装后端调用，`X-API-Key` header 自动注入。
+2. **`app/api/`** — FastAPI 路由 + 安全中间件层。
+   - 路由：`chat.py`（SSE 流式对话，含 503 预检）、`documents.py`（上传+状态查询）
+   - 中间件：`auth.py`（API Key 认证，`secrets.compare_digest` 恒定时间比较）、`rate_limit.py`（IP 滑动窗口限流，惰性启动）、`audit.py`（结构化审计日志）
+   - 公共工具：`_utils.py`（`get_client_ip` 等复用函数）
+   - **薄如纸**：只做参数校验/安全检查 + 调 service + 返回响应。不含任何业务逻辑。
+3. **`app/services/`** — 业务逻辑层。`QueryService` 管理 RAG 引擎生命周期（延迟初始化 + 自动刷新），`IngestionService` 管理文档入库（`ingest_upload` / `ingest_bytes` / `ingest_batch`）。可脱离 HTTP 独立测试。
 4. **`app/rag/`** — RAG 检索链路。`HybridRetriever`(BM25+Dense+RRF) → `Reranker`(bge-reranker/pass-through) → `QueryEngine`(检索→重排→LLM→SSE)。可单独命令行调试。
 5. **`app/etl/`** — ETL 离线清洗链路。parser → cleaner → chunker → pipeline，每步职责单一。存储基于 `InMemoryDocStore`(LlamaIndex SimpleDocumentStore + 本地持久化)。
+6. **`app/eval/`** — RAG 评估模块。dataset → metrics → runner → report → CLI，基于 Ragas 五指标评估检索和生成质量。支持 `--mock` 模式（不调用 API 验证流程）。
 
 **关键设计决策：**
 
 - `app/config.py`：用 `pydantic-settings` 强类型配置，禁止在业务代码中 `os.getenv()`。全局单例 `from app.config import settings`。
 - `app/main.py`：`lifespan` 事件中初始化持久化目录、ETL Pipeline、IngestionService、QueryService，绑定回调链（入库→刷新索引），shutdown 时落盘。
+- **中间件链**（Starlette LIFO — 后添加先执行）：`AuditLog(最外层) → RateLimit → Auth → CORS(最内层) → handler`。限流在认证之前防暴力破解，审计在最外层捕获所有请求。
+- **API Key 认证**：`auth.py` 仅对 `/api/*` 路径生效，`settings.api_key` 为空时跳过。使用 `secrets.compare_digest` 恒定时间比较防时序攻击。
+- **速率限制**：`rate_limit.py` 滑动窗口（60s）+ IP 维度，chat 30/min、upload 10/min、默认 60/min。定时清理惰性启动（首次 dispatch 时），每个 IP 时间戳上限 200。
+- **审计日志**：`audit.py` 记录 IP、method、path、status、duration、user_agent、auth_status 到独立 `audit` logger，可独立配置 handler。
+- **文件上传安全**：路由层先读 bytes 做大小检查（413 超限），直接传 `ingest_bytes()` 避免二次读取。默认上限 50MB。
+- **XSS 防护**：`web_ui/chat.py` 引用卡片渲染前 `html.escape()` 转义文档内容。
 - 中文分词：jieba 替换 LlamaIndex BM25 默认英文 tokenizer。所有 BM25 相关代码必须显式传入 `tokenizer=chinese_tokenizer`。
 - 引用追踪：检索结果的 `node.metadata` 携带 `filename`、`page_number`、`heading_path`、`chunk_type`、`department_id` 等字段，前端引用卡片和 SSE citation 事件均从 metadata 提取——**不由 LLM 生成**。
 - SSE 流式协议：`POST /api/chat/stream` 响应 `text/event-stream`，事件类型：`citation`(引用声明) → `token`(流式文本)×N → `done`(结束信号)。引擎未就绪返回 503。
@@ -45,6 +60,7 @@ web_ui/ (Streamlit) ──HTTP/SSE──▶ app/api/ (薄路由) ──▶ app/s
 - `DashScopeEmbedding`：`embed_batch_size=10`（DashScope API 单次上限 10 条，默认 25 会报 InvalidParameter）。
 - `DashScope.astream_chat()`：返回 coroutine，需先 `await` 拿到 async generator 再 `async for` 迭代（新版 llama-index API 变更）。
 - 异步方法（`aretrieve`/`arerank`）：用 `loop.run_in_executor` 包装同步调用，避免阻塞事件循环。
+- 评估 LLM：`app/eval/metrics.py` 使用 DashScope OpenAI 兼容端点（`base_url` 指向 DashScope），通过 `openai.OpenAI` 客户端 + `ragas.llms.llm_factory` 创建，避免 `OPENAI_API_KEY` 环境变量泄漏。
 
 ## 当前开发阶段
 
@@ -54,16 +70,21 @@ web_ui/ (Streamlit) ──HTTP/SSE──▶ app/api/ (薄路由) ──▶ app/s
 | 二 | ETL 链路（PDF/DOCX/MD/TXT 解析、表格感知切块、元数据注入、InMemoryDocStore） | ✅ |
 | 三 | RAG 检索（BM25+Dense 混合检索 + RRF + bge-reranker + SSE 流式查询引擎） | ✅ |
 | 四 | API 路由 + services + web_ui/ Streamlit 前端 | ✅ |
-| 五 | Ragas 评估 + docs/ | ⏳ |
+| 五 | Ragas 评估 + docs/ | ✅ |
+| 六 | 安全加固（API Key 认证、速率限制、审计日志、XSS 防护、CORS 修复） | ✅ |
 
-**测试**: 86 passed, 2 skipped（集成测试需 `RUN_RAG_TESTS=1`）。
+**测试**: 111 collected, 108 passed, 3 skipped（集成测试需 `RUN_RAG_TESTS=1` 或有效 `DASHSCOPE_API_KEY`）。
+
+**总代码量**: 49 个 Python 文件（app 33 + web_ui 5 + scripts 2 + tests 12）。
 
 ## 模型与 API
 
 - LLM: qwen-plus（通过 `llama-index-llms-dashscope`，依赖 `llama-index-llms-openai` 提供基类）
 - Embedding: text-embedding-v3（通过 `llama-index-embeddings-dashscope`，batch size ≤10）
-- API Key: `.env` 中 `DASHSCOPE_API_KEY`（需用户自行申请）
+- API Key: `.env` 中 `DASHSCOPE_API_KEY`（需用户自行申请）；应用层 API Key 可选（`settings.api_key`）
 - 重排序: bge-reranker-v2-m3（HuggingFace 本地加载，FlagEmbedding 不可用时自动降级为 pass-through）
+- 评估 LLM: DashScope OpenAI 兼容端点（`https://dashscope.aliyuncs.com/compatible-mode/v1`）
+- 安全: API Key 认证 + IP 速率限制 + 审计日志 + XSS 防护 + CORS 白名单
 
 ## 代码规范
 

@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     hybrid_top_k: int = 15
     llm_temperature: float = 0.1
 
+    # ── 安全 ──
+    api_key: str = ""
+    cors_origins: str = "http://localhost:8501,http://127.0.0.1:8501"
+    max_upload_size_mb: int = 50
+
     # ── 服务 ──
     api_host: str = "0.0.0.0"
     api_port: int = 8000

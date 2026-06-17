@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import requests
@@ -23,6 +24,14 @@ class APIClient:
 
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url.rstrip("/")
+        self._api_key = os.getenv("API_KEY", "")
+
+    def _headers(self) -> dict[str, str]:
+        """构造通用请求头，包含 API Key（如有配置）。"""
+        headers: dict[str, str] = {}
+        if self._api_key:
+            headers["X-API-Key"] = self._api_key
+        return headers
 
     # ── 文档管理 ────────────────────────────────────────
 
@@ -48,6 +57,7 @@ class APIClient:
             files=files,
             data=data,
             timeout=120,
+            headers=self._headers(),
         )
         resp.raise_for_status()
         return resp.json()
@@ -55,7 +65,8 @@ class APIClient:
     def check_document_status(self, checksum: str) -> dict[str, Any]:
         """通过 checksum 检查文档是否已入库。"""
         resp = requests.get(
-            f"{self.base_url}/api/documents/status/{checksum}", timeout=10
+            f"{self.base_url}/api/documents/status/{checksum}", timeout=10,
+            headers=self._headers(),
         )
         resp.raise_for_status()
         return resp.json()
@@ -77,6 +88,7 @@ class APIClient:
             json=body,
             stream=True,
             timeout=120,
+            headers=self._headers(),
         )
         resp.raise_for_status()
 
@@ -94,7 +106,8 @@ class APIClient:
 
     def health_check(self) -> dict[str, Any]:
         """健康检查。"""
-        resp = requests.get(f"{self.base_url}/health", timeout=5)
+        resp = requests.get(f"{self.base_url}/health", timeout=5,
+            headers=self._headers())
         resp.raise_for_status()
         return resp.json()
 

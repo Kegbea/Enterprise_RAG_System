@@ -12,6 +12,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.audit import AuditLogMiddleware
+from app.api.auth import APIKeyMiddleware
+from app.api.rate_limit import RateLimitMiddleware
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -70,14 +73,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — 允许 Streamlit 前端跨域调用
+# 中间件顺序（Starlette LIFO — 后添加先执行）：
+# 请求链：AuditLog → RateLimit → Auth → CORS → handler
+# 响应链：handler → CORS → Auth → RateLimit → AuditLog
+
+# 1. CORS — 最内层，确保跨域头最后写入
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
+
+# 2. API Key 认证 — 对所有 /api/* 路由生效（api_key 为空时跳过）
+app.add_middleware(APIKeyMiddleware)
+
+# 3. 速率限制 — 在认证之后、审计之前，防止暴力破解
+app.add_middleware(RateLimitMiddleware)
+
+# 4. 审计日志 — 最外层，记录所有请求（含被限流/认证拒绝的请求）
+app.add_middleware(AuditLogMiddleware)
 
 
 # ── 健康检查端点 ──

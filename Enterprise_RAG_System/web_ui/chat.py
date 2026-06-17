@@ -131,7 +131,12 @@ def _inject_css() -> None:
 
 
 def _render_citations(citations: list[dict]) -> None:
-    """渲染引用来源卡片列表。"""
+    """渲染引用来源卡片列表。
+
+    安全：用户文档内容在渲染前先做 HTML 转义，防止 XSS。
+    """
+    import html as html_mod
+
     import streamlit as st
 
     if not citations:
@@ -139,14 +144,15 @@ def _render_citations(citations: list[dict]) -> None:
 
     st.markdown("**📚 引用来源：**")
     for c in citations:
-        filename = c.get("filename", "unknown")
+        filename = html_mod.escape(c.get("filename", "unknown"))
         page = f" 第{c['page_number']}页" if c.get("page_number") else ""
-        heading = f" > {c['heading_path']}" if c.get("heading_path") else ""
-        snippet = c.get("snippet", "")[:200]
+        heading = html_mod.escape(c.get("heading_path", ""))
+        heading_display = f" &gt; {heading}" if c.get("heading_path") else ""
+        snippet = html_mod.escape(c.get("snippet", ""))[:200]
 
         st.markdown(f"""
         <div class="citation-card">
-            <div class="meta">📄 {filename}{page} &nbsp; {heading}</div>
+            <div class="meta">&#128196; {filename}{page} &nbsp; {heading_display}</div>
             <div class="snippet">{snippet}</div>
         </div>
-        """.replace(">", "&gt;").replace("<", "&lt;"), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
