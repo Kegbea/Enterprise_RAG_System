@@ -185,7 +185,8 @@ class QueryEngine:
 
         # 5. 流式生成
         token_count = 0
-        async for chunk in self._llm.astream_chat(messages):
+        stream = await self._llm.astream_chat(messages)
+        async for chunk in stream:
             delta = chunk.delta or ""
             if delta:
                 token_count += 1

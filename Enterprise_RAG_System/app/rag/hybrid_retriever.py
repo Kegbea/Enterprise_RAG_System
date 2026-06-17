@@ -22,6 +22,7 @@ from llama_index.core.retrievers import QueryFusionRetriever
 from llama_index.core.retrievers.fusion_retriever import FUSION_MODES
 from llama_index.core.schema import NodeWithScore, TextNode
 from llama_index.embeddings.dashscope import DashScopeEmbedding
+from llama_index.llms.dashscope import DashScope
 from llama_index.retrievers.bm25 import BM25Retriever
 
 from app.config import settings
@@ -78,6 +79,7 @@ class HybridRetriever:
         self._embed_model = DashScopeEmbedding(
             model_name=embedding_model or settings.embedding_model,
             api_key=settings.dashscope_api_key,
+            embed_batch_size=10,  # DashScope API 限制：单次最多 10 条
         )
         self._build_retrievers()
 
@@ -138,8 +140,15 @@ class HybridRetriever:
             similarity_top_k=self._dense_top_k
         )
 
+        # RRF 融合需要传 LLM（用于 query generation，但 num_queries=1 时不生成）。
+        # 如果不传，LlamaIndex 会回退到全局 Settings.llm（默认 OpenAI），
+        # 导致检查 OPENAI_API_KEY 而报错。
         self._fusion_retriever = QueryFusionRetriever(
             retrievers=[self._bm25_retriever, self._dense_retriever],
+            llm=DashScope(
+                model_name=settings.llm_model,
+                api_key=settings.dashscope_api_key,
+            ),
             mode=FUSION_MODES.RECIPROCAL_RANK,
             similarity_top_k=self._fusion_top_k,
             num_queries=1,
