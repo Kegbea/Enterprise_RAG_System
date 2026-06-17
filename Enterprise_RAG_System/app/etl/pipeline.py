@@ -204,19 +204,20 @@ class ETLPipeline:
                     error_message="No content extracted (empty document?)",
                 )
 
-            # 7. 写入存储
-            self._add_to_store(nodes)
+            # 7. 写入存储（返回实际写入数，过滤后可能少于切块数）
+            actual_count = self._add_to_store(nodes)
 
             duration = (time.perf_counter() - start) * 1000
             status = "overwritten" if overwrite else "created"
             logger.info(
-                f"Ingested {filename}: {len(nodes)} nodes, {duration:.0f}ms, status={status}"
+                f"Ingested {filename}: {actual_count}/{len(nodes)} nodes, "
+                f"{duration:.0f}ms, status={status}"
             )
 
             return IngestResult(
                 filename=filename,
                 status=status,
-                chunks_created=len(nodes),
+                chunks_created=actual_count,
                 checksum=checksum,
                 duration_ms=duration,
             )
@@ -263,9 +264,24 @@ class ETLPipeline:
 
         return batch
 
-    def _add_to_store(self, nodes) -> None:
-        """将 LlamaIndex TextNode 列表写入存储。"""
-        ids = [n.node_id for n in nodes]
-        texts = [n.text for n in nodes]
-        metadatas = [n.metadata for n in nodes]
+    def _add_to_store(self, nodes) -> int:
+        """将 LlamaIndex TextNode 列表写入存储。
+
+        防御性过滤：跳过文本为空或纯空白的节点，避免传给 Embedding API 后
+        返回 None 向量导致 Pydantic 校验崩溃。
+
+        Returns:
+            实际写入的节点数量（过滤后）。
+        """
+        filtered = [n for n in nodes if n.text and n.text.strip()]
+        if len(filtered) < len(nodes):
+            logger.warning(
+                f"Skipping {len(nodes) - len(filtered)} empty/whitespace-only nodes"
+            )
+        if not filtered:
+            return 0
+        ids = [n.node_id for n in filtered]
+        texts = [n.text for n in filtered]
+        metadatas = [n.metadata for n in filtered]
         self.store.add(ids=ids, documents=texts, metadatas=metadatas)
+        return len(filtered)

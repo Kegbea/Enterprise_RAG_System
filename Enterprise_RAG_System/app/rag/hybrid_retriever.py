@@ -80,7 +80,7 @@ class HybridRetriever:
         self._embed_model = DashScopeEmbedding(
             model_name=embedding_model or settings.embedding_model,
             api_key=settings.dashscope_api_key,
-            embed_batch_size=10,  # DashScope API 限制：单次最多 10 条
+            embed_batch_size=settings.embed_batch_size,
         )
         # 创建一次 LLM 实例，供 _build_retrievers() 和 refresh() 复用
         self._fusion_llm = DashScope(

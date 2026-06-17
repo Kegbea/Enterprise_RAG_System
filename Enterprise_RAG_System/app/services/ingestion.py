@@ -131,8 +131,16 @@ class IngestionService:
         )
 
         # 入库成功后通知 QueryService 刷新检索索引
+        # refresh() 内部已将耗时操作提交到线程池，此处不阻塞 HTTP 响应
         if result.status in ("created", "overwritten") and self._on_ingested:
-            self._on_ingested()
+            try:
+                self._on_ingested()
+            except Exception:
+                logger.exception(
+                    "Callback _on_ingested raised exception for %s "
+                    "(document stored, index may be stale)",
+                    filename,
+                )
 
         return result
 

@@ -46,11 +46,16 @@ class TableAwareChunker:
             for seg_type, seg_text, table_idx in segments:
                 if seg_type == "table":
                     if table_idx is not None and table_idx < len(page.tables):
+                        table_md = page.tables[table_idx]
+                        # 跳过空表格
+                        if not table_md.strip():
+                            continue
                         node = self._create_table_node(
-                            page.tables[table_idx], page, base_metadata
+                            table_md, page, base_metadata
                         )
                         child_nodes.append(node)
                 else:
+                    # _split_text 已保证返回的每个 sub 非空（含纯空白过滤）
                     sub_texts = self._split_text(seg_text)
                     for sub in sub_texts:
                         node = self._create_text_node(sub, page, base_metadata)
@@ -126,10 +131,13 @@ class TableAwareChunker:
                 start = 0
                 while start < len(chunk):
                     end = min(start + self.config.chunk_size, len(chunk))
-                    final.append(chunk[start:end])
+                    sub = chunk[start:end]
+                    if sub.strip():         # 防御：跳过纯空白切片
+                        final.append(sub)
                     start = end - self.config.chunk_overlap
             else:
-                final.append(chunk)
+                if chunk.strip():
+                    final.append(chunk)
         return final
 
     def _create_text_node(

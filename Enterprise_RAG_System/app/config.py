@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 50
 
+    # ── Embedding ──
+    embed_batch_size: int = 5  # DashScope 单次最多 10 条，降至 5 避开 QPS 限流
+    embed_max_retries: int = 5
+
     # ── 检索参数 ──
     top_k: int = 5
     hybrid_top_k: int = 15
