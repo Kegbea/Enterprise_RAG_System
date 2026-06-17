@@ -9,9 +9,10 @@ uv sync                          # 安装/同步所有依赖（含 dev）
 uv sync --no-dev                 # 仅生产依赖
 uv run uvicorn app.main:app --reload   # 启动 FastAPI 后端
 uv run streamlit run web_ui/app.py     # 启动 Streamlit 前端
-uv run pytest -v                 # 运行全部测试
+uv run pytest -v                 # 运行全部测试（当前 86 个）
 uv run pytest -v --cov=app       # 带覆盖率
 uv run pytest tests/test_parser.py -v  # 单文件测试
+uv run pytest -m "not slow"      # 跳过慢速测试
 uv run ruff check .              # lint 检查
 uv run ruff format .             # 代码格式化
 ```
@@ -20,49 +21,56 @@ uv run ruff format .             # 代码格式化
 
 ```
 web_ui/ (Streamlit) ──HTTP/SSE──▶ app/api/ (薄路由) ──▶ app/services/ (业务逻辑)
-                                                              │
-                                     app/rag/ (检索) ◀────────┤
-                                     app/etl/ (入库) ◀────────┘
+                                                             │
+                                    app/rag/ (检索) ◀────────┤
+                                    app/etl/ (入库) ◀────────┘
 ```
 
-**四个核心层，从上到下：**
+**五层结构，从上到下：**
 
-1. **`app/api/`** — FastAPI 路由层。**薄如纸**：只做参数校验 + 调 service + 返回响应。不含任何业务逻辑。
-2. **`app/services/`** — 业务逻辑层。可被多个 router 复用，可脱离 HTTP 独立测试。
-3. **`app/rag/`** — RAG 检索链路。检索策略（hybrid_retriever / reranker）和查询引擎（query_engine）独立于 API 层，可单独命令行调试。
-4. **`app/etl/`** — ETL 离线清洗链路。parser → cleaner → chunker → pipeline，每步职责单一。
+1. **`web_ui/`** — Streamlit 前端。侧边栏导航，聊天页（流式+引用卡片）、文档管理页。通过 `api_client.py` 封装后端调用。
+2. **`app/api/`** — FastAPI 路由层。**薄如纸**：只做参数校验 + 调 service + 返回响应。`chat.py` 含 503 预检（引擎未就绪时拒绝请求）。不含任何业务逻辑。
+3. **`app/services/`** — 业务逻辑层。`QueryService` 管理 RAG 引擎生命周期（延迟初始化 + 自动刷新），`IngestionService` 管理文档入库。可脱离 HTTP 独立测试。
+4. **`app/rag/`** — RAG 检索链路。`HybridRetriever`(BM25+Dense+RRF) → `Reranker`(bge-reranker/pass-through) → `QueryEngine`(检索→重排→LLM→SSE)。可单独命令行调试。
+5. **`app/etl/`** — ETL 离线清洗链路。parser → cleaner → chunker → pipeline，每步职责单一。存储基于 `InMemoryDocStore`(LlamaIndex SimpleDocumentStore + 本地持久化)。
 
 **关键设计决策：**
 
 - `app/config.py`：用 `pydantic-settings` 强类型配置，禁止在业务代码中 `os.getenv()`。全局单例 `from app.config import settings`。
-- `app/main.py`：`lifespan` 事件中初始化持久化目录和 RAG 引擎全局实例（挂到 `app.state`），shutdown 时清理。
+- `app/main.py`：`lifespan` 事件中初始化持久化目录、ETL Pipeline、IngestionService、QueryService，绑定回调链（入库→刷新索引），shutdown 时落盘。
 - 中文分词：jieba 替换 LlamaIndex BM25 默认英文 tokenizer。所有 BM25 相关代码必须显式传入 `tokenizer=chinese_tokenizer`。
-- 引用追踪：检索结果的 `node.metadata` 携带 `filename`、`page_number`、`heading_path`、`chunk_type`、`department_id` 等字段，前端引用卡片和流式响应的 citation 事件均从 metadata 提取——**不由 LLM 生成**。
-- SSE 流式协议：`POST /api/chat/stream` 响应 `text/event-stream`，事件类型含 `token`（流式文本）、`citation`（引用来）、`done`（结束信号）。
+- 引用追踪：检索结果的 `node.metadata` 携带 `filename`、`page_number`、`heading_path`、`chunk_type`、`department_id` 等字段，前端引用卡片和 SSE citation 事件均从 metadata 提取——**不由 LLM 生成**。
+- SSE 流式协议：`POST /api/chat/stream` 响应 `text/event-stream`，事件类型：`citation`(引用声明) → `token`(流式文本)×N → `done`(结束信号)。引擎未就绪返回 503。
+- `QueryFusionRetriever`：必须显式传入 LLM 实例（DashScope），否则回退到全局 `Settings.llm`（默认 OpenAI），导致 `OPENAI_API_KEY` 检查失败。
+- `DashScopeEmbedding`：`embed_batch_size=10`（DashScope API 单次上限 10 条，默认 25 会报 InvalidParameter）。
+- `DashScope.astream_chat()`：返回 coroutine，需先 `await` 拿到 async generator 再 `async for` 迭代（新版 llama-index API 变更）。
+- 异步方法（`aretrieve`/`arerank`）：用 `loop.run_in_executor` 包装同步调用，避免阻塞事件循环。
 
 ## 当前开发阶段
 
-**阶段一已完成**（环境奠基）：pyproject.toml、config、FastAPI /health 端点可启动。
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| 一 | 环境奠基（pyproject.toml、config、FastAPI /health） | ✅ |
+| 二 | ETL 链路（PDF/DOCX/MD/TXT 解析、表格感知切块、元数据注入、InMemoryDocStore） | ✅ |
+| 三 | RAG 检索（BM25+Dense 混合检索 + RRF + bge-reranker + SSE 流式查询引擎） | ✅ |
+| 四 | API 路由 + services + web_ui/ Streamlit 前端 | ✅ |
+| 五 | Ragas 评估 + docs/ | ⏳ |
 
-**待开发：**
-- 阶段二：app/etl/（PDF/DOCX/MD/TXT 解析 + 表格感知切块 + 元数据注入 + ChromaDB 入库）
-- 阶段三：app/rag/（BM25+Dense 混合检索 + RRF + bge-reranker + 流式查询引擎）
-- 阶段四：app/api/ 路由 + app/services/ + web_ui/ Streamlit 前端
-- 阶段五：Ragas 评估 + docs/
+**测试**: 86 passed, 2 skipped（集成测试需 `RUN_RAG_TESTS=1`）。
 
 ## 模型与 API
 
-- LLM: qwen-plus（通过 `llama-index-llms-dashscope`）
-- Embedding: text-embedding-v3（通过 `llama-index-embeddings-dashscope`）
-- API Key: `.env` 中 `DASHSCOPE_API_KEY`，当前为占位值，需用户填入真实 key
-- 重排序: bge-reranker-v2-m3（HuggingFace 本地加载，首次运行自动下载）
+- LLM: qwen-plus（通过 `llama-index-llms-dashscope`，依赖 `llama-index-llms-openai` 提供基类）
+- Embedding: text-embedding-v3（通过 `llama-index-embeddings-dashscope`，batch size ≤10）
+- API Key: `.env` 中 `DASHSCOPE_API_KEY`（需用户自行申请）
+- 重排序: bge-reranker-v2-m3（HuggingFace 本地加载，FlagEmbedding 不可用时自动降级为 pass-through）
 
 ## 代码规范
 
 - Python 3.12，uv 管理依赖，ruff 格式化（行宽 100）
 - 所有 `__init__.py` 为空文件
 - Pydantic v2 语法（`model_config`、`field_validator`），禁用 v1 风格
-- 异步全链路：FastAPI async/await → LlamaIndex `aquery()` → SSE 流式响应
+- 异步全链路：FastAPI async/await → SSE 流式响应，同步检索/重排方法通过 `run_in_executor` 桥接到异步调用
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
 # Superpowers-ZH 中文增强版
