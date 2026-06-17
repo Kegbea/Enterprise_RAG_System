@@ -80,12 +80,12 @@ class APIClient:
         )
         resp.raise_for_status()
 
-        # 手动解析 SSE 事件流
+        # 解析 SSE 事件流（先 normalize 行尾，兼容 \r\n）
         buffer = ""
         for chunk in resp.iter_content(chunk_size=8192, decode_unicode=True):
             if chunk is None:
                 continue
-            buffer += chunk
+            buffer += chunk.replace("\r\n", "\n")
             while "\n\n" in buffer:
                 block, buffer = buffer.split("\n\n", 1)
                 event_type, data = _parse_sse_block(block)

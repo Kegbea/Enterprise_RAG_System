@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 
@@ -81,6 +82,11 @@ class HybridRetriever:
             api_key=settings.dashscope_api_key,
             embed_batch_size=10,  # DashScope API 限制：单次最多 10 条
         )
+        # 创建一次 LLM 实例，供 _build_retrievers() 和 refresh() 复用
+        self._fusion_llm = DashScope(
+            model_name=settings.llm_model,
+            api_key=settings.dashscope_api_key,
+        )
         self._build_retrievers()
 
         logger.info(
@@ -100,8 +106,9 @@ class HybridRetriever:
         return results
 
     async def aretrieve(self, query: str) -> list[NodeWithScore]:
-        """异步版本（委托给同步检索）。"""
-        return self.retrieve(query)
+        """异步版本 — 在线程池中执行同步检索，避免阻塞事件循环。"""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.retrieve, query)
 
     def refresh(self, nodes: list[TextNode]) -> None:
         """文档库变更后刷新索引。
@@ -145,10 +152,7 @@ class HybridRetriever:
         # 导致检查 OPENAI_API_KEY 而报错。
         self._fusion_retriever = QueryFusionRetriever(
             retrievers=[self._bm25_retriever, self._dense_retriever],
-            llm=DashScope(
-                model_name=settings.llm_model,
-                api_key=settings.dashscope_api_key,
-            ),
+            llm=self._fusion_llm,
             mode=FUSION_MODES.RECIPROCAL_RANK,
             similarity_top_k=self._fusion_top_k,
             num_queries=1,

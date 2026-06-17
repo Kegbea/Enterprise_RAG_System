@@ -183,7 +183,8 @@ class QueryEngine:
             chat_history=chat_history,
         )
 
-        # 5. 流式生成
+        # 5. 流式生成（DashScope.astream_chat() 返回 coroutine，
+        #    需先 await 拿到 async generator，再 async for 迭代）
         token_count = 0
         stream = await self._llm.astream_chat(messages)
         async for chunk in stream:

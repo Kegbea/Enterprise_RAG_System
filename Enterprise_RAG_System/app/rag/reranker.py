@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from llama_index.core.schema import NodeWithScore, QueryBundle
@@ -106,5 +107,6 @@ class Reranker:
         query: str | QueryBundle,
         nodes: list[NodeWithScore],
     ) -> list[NodeWithScore]:
-        """异步版本（委托同步方法）。"""
-        return self.rerank(query, nodes)
+        """异步版本 — 在线程池中执行，避免阻塞事件循环。"""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.rerank, query, nodes)

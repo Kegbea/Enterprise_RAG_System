@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+import os
+
 import streamlit as st
 
 # ── 页面配置（必须是第一个 st 命令） ───────────────────
@@ -26,11 +28,15 @@ st.set_page_config(
 st.sidebar.title("🔍 Enterprise RAG")
 st.sidebar.caption("企业级智能知识问答系统")
 
-# 后端地址配置
+# 后端地址配置（与 app/config.py 的 api_host/api_port 保持一致）
+_default_port = os.getenv("API_PORT", "8000")
+_default_host = os.getenv("API_HOST", "localhost")
+_default_url = f"http://{_default_host}:{_default_port}"
+
 api_base_url = st.sidebar.text_input(
     "后端 API 地址",
-    value="http://localhost:8000",
-    help="FastAPI 后端地址，默认 http://localhost:8000",
+    value=_default_url,
+    help=f"FastAPI 后端地址，默认 {_default_url}",
 )
 
 # 健康状态指示器

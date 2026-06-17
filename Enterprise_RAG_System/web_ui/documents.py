@@ -51,8 +51,13 @@ def render(api_base_url: str) -> None:
         if st.button("🚀 提交入库", type="primary", use_container_width=True):
             tags = [t.strip() for t in tags_input.split(",") if t.strip()]
 
-            for file in uploaded_files:
+            # 串行处理 + 进度条（Streamlit 的 st.status 不支持线程间调用）
+            file_count = len(uploaded_files)
+            progress = st.progress(0, f"0/{file_count}")
+            for idx, file in enumerate(uploaded_files):
                 _ingest_file(client, file, department_id, tags)
+                progress.progress((idx + 1) / file_count, f"{idx + 1}/{file_count}")
+            st.success(f"已处理 {file_count} 个文件")
 
     # ── 状态查询 ──────────────────────────────────────────
 

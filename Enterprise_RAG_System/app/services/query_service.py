@@ -65,9 +65,12 @@ class QueryService:
             RuntimeError: 引擎未初始化（无文档）
         """
         if not self.ensure_ready():
+            if self._store.count() == 0:
+                raise RuntimeError(
+                    "无文档：请先上传文档。POST /api/documents/upload"
+                )
             raise RuntimeError(
-                "RAG 引擎未初始化：请先上传文档。"
-                "POST /api/documents/upload"
+                "RAG 引擎初始化失败：请检查 DASHSCOPE_API_KEY 配置是否正确。"
             )
 
         async for event in self._engine.query_stream(query, chat_history):
