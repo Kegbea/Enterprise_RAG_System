@@ -24,6 +24,9 @@ data/eval/
 data/storage/
 data/test_storage/
 
+# ── Claude Code ──
+.claude/
+
 # ── IDE ──
 .vscode/
 .idea/
